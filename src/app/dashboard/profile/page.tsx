@@ -19,7 +19,7 @@ export default async function ProfilePage() {
   const { data: preferences } = await supabase.from('preferences').select('*').eq('id', user.id).maybeSingle()
   const { data: resume } = await supabase.from('resumes').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
 
-  const isAdmin = user.email === 'admin@orbiter.io' || profile?.role === 'admin'
+  const isAdmin = profile?.role === 'admin'
 
   // Generate a signed URL to view the resume PDF
   let resumeUrl = null

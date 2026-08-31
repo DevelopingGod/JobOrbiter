@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Loader2, X, Plus, ChevronDown, Check } from 'lucide-react'
+import { unstable_rethrow } from 'next/navigation'
 import { updateProfileSettings } from '@/app/dashboard/profile/actions'
 
 const CURRENCIES = [
@@ -29,6 +30,7 @@ export function ProfileSettingsForm({ initialPreferences }: { initialPreferences
   const [remoteOnly, setRemoteOnly] = useState(initialPreferences?.remote_only || false)
   const [success, setSuccess] = useState(false)
   const [currencyOpen, setCurrencyOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleAddRole = (e: React.KeyboardEvent | React.MouseEvent) => {
     if ('key' in e && e.key !== 'Enter') return
@@ -47,17 +49,24 @@ export function ProfileSettingsForm({ initialPreferences }: { initialPreferences
     e.preventDefault()
     setLoading(true)
     setSuccess(false)
-    
-    await updateProfileSettings({
-      desired_roles: roles,
-      min_salary: minSalary,
-      currency,
-      remote_only: remoteOnly
-    })
-    
-    setLoading(false)
-    setSuccess(true)
-    setTimeout(() => setSuccess(false), 3000)
+    setError(null)
+
+    try {
+      await updateProfileSettings({
+        desired_roles: roles,
+        min_salary: minSalary,
+        currency,
+        remote_only: remoteOnly
+      })
+
+      setLoading(false)
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 3000)
+    } catch (err) {
+      unstable_rethrow(err)
+      setError('Could not update your constraints. Please try again.')
+      setLoading(false)
+    }
   }
 
   return (
@@ -161,6 +170,12 @@ export function ProfileSettingsForm({ initialPreferences }: { initialPreferences
           Strictly Remote Only
         </label>
       </div>
+
+      {error && (
+        <p className="text-red-500 text-sm font-semibold p-3 bg-red-500/10 rounded-xl border border-red-500/20 text-center">
+          {error}
+        </p>
+      )}
 
       <button
         type="submit"

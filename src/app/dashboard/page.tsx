@@ -44,7 +44,7 @@ export default async function DashboardPage() {
     .order('created_at', { ascending: false })
 
   const matches = jobMatches || []
-  const isAdmin = user.email === 'admin@orbiter.io' || profile?.role === 'admin'
+  const isAdmin = profile?.role === 'admin'
   const isSandbox = !resume
 
   return (

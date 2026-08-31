@@ -54,10 +54,7 @@ export function ScoutButton() {
 
       const response = await fetch('/api/agent/scout', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(activeKey ? { 'x-groq-api-key': activeKey } : {})
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customApiKey: activeKey })
       })
 
@@ -65,24 +62,32 @@ export function ScoutButton() {
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
-      
+
+      // Buffer across reads: an HTTP chunk boundary can split a single SSE
+      // event in half, and each read() only returns what happened to arrive
+      // in that chunk. Only fully-formed "\n\n"-terminated events are
+      // processed; any trailing partial event is kept for the next read.
+      let buffer = ''
       let done = false
       while (!done) {
         const { value, done: readerDone } = await reader.read()
         done = readerDone
         if (value) {
-          const chunk = decoder.decode(value)
-          const lines = chunk.split('\n\n')
-          
-          for (const line of lines) {
+          buffer += decoder.decode(value, { stream: true })
+
+          const events = buffer.split('\n\n')
+          // The last element may be an incomplete event — hold it back.
+          buffer = events.pop() ?? ''
+
+          for (const line of events) {
             if (line.startsWith('event: ')) {
               const eventType = line.split('\n')[0].replace('event: ', '')
               const dataStr = line.split('\n')[1]?.replace('data: ', '')
-              
+
               if (dataStr) {
                 try {
                   const data = JSON.parse(dataStr)
-                  
+
                   if (eventType === 'status') {
                     setStatusMessage(data.message)
                   } else if (eventType === 'rate_limit') {

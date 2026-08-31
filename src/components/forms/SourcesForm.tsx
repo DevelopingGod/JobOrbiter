@@ -153,7 +153,7 @@ export function SourcesForm({ onComplete, isLoggedIn = true }: { onComplete: () 
             {isLinkedinActive ? <CheckCircle2 className="w-5 h-5 text-blue-500" /> : <Circle className="w-5 h-5 text-zinc-500" />}
             <div className="text-left">
               <p className={`font-bold ${isLinkedinActive ? 'text-white' : 'text-zinc-400'}`}>LinkedIn (Experimental)</p>
-              <p className="text-xs text-zinc-500">Headless credentialed scraper</p>
+              <p className="text-xs text-zinc-500">Public job search (no login)</p>
             </div>
           </div>
         </button>
