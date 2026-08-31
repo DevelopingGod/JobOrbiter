@@ -38,7 +38,7 @@ export async function POST(req: Request) {
 
     // Optional: If downvoted, maybe delete or hide the job from matches so it doesn't clutter
     if (action === 'downvote') {
-      await supabase.from('job_matches').delete().eq('id', jobId)
+      await supabase.from('job_matches').delete().eq('id', jobId).eq('user_id', user.id)
     }
 
     return NextResponse.json({ success: true })

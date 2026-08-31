@@ -49,3 +49,6 @@ next-env.d.ts
 # playwright generated output (regenerated on every test run)
 /playwright-report/
 /test-results/
+
+# gstack local state (security reports, decisions, telemetry) — stays local
+.gstack/
