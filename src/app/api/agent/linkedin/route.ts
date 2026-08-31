@@ -17,9 +17,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Keywords are required' }, { status: 400 })
     }
 
-    const jobs = await runLinkedinScraper(keywords, location || 'Remote')
+    const result = await runLinkedinScraper(keywords, location || 'Remote')
 
-    return NextResponse.json({ success: true, jobs })
+    if (result.status === 'error') {
+      return NextResponse.json({ error: result.error }, { status: 502 })
+    }
+
+    return NextResponse.json({ success: true, jobs: result.jobs })
   } catch (error: any) {
     console.error('LinkedIn Scraper API Error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })

@@ -8,10 +8,24 @@ export interface HackerNewsJob {
   salary_info: string | null
 }
 
+export type FetchJobsResult =
+  | { status: 'ok'; jobs: HackerNewsJob[] }
+  | { status: 'error'; jobs: []; error: string }
+
+// The "who is hiring" thread only changes monthly and is identical for every
+// user, so cache it in-process instead of re-fetching + re-parsing on every
+// scout run across every user.
+const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
+let cache: { jobs: HackerNewsJob[]; fetchedAt: number } | null = null
+
 /**
  * Fetches the most recent "Ask HN: Who is hiring?" thread and extracts jobs from the comments.
  */
-export async function fetchHackerNewsJobs(): Promise<HackerNewsJob[]> {
+export async function fetchHackerNewsJobs(): Promise<FetchJobsResult> {
+  if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
+    return { status: 'ok', jobs: cache.jobs }
+  }
+
   try {
     // 1. Find the latest "Who is hiring?" thread
     const searchRes = await fetch(
@@ -24,7 +38,8 @@ export async function fetchHackerNewsJobs(): Promise<HackerNewsJob[]> {
 
     const searchData = await searchRes.json()
     if (!searchData.hits || searchData.hits.length === 0) {
-      return []
+      cache = { jobs: [], fetchedAt: Date.now() }
+      return { status: 'ok', jobs: [] }
     }
 
     const latestThreadId = searchData.hits[0].objectID
@@ -75,10 +90,11 @@ export async function fetchHackerNewsJobs(): Promise<HackerNewsJob[]> {
       if (jobs.length >= 20) break
     }
 
-    return jobs
+    cache = { jobs, fetchedAt: Date.now() }
+    return { status: 'ok', jobs }
 
   } catch (error) {
     console.error('HackerNews Agent Error:', error)
-    return []
+    return { status: 'error', jobs: [], error: error instanceof Error ? error.message : 'Unknown error' }
   }
 }

@@ -9,6 +9,9 @@ interface AIClientOptions {
   model?: string
   temperature?: number
   jsonMode?: boolean
+  maxTokens?: number
+  /** Per-call override, e.g. a user-supplied Groq key passed through from a request. */
+  apiKey?: string
 }
 
 const AI_PROVIDER = process.env.AI_PROVIDER || 'groq'
@@ -16,9 +19,15 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434'
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:latest'
 
-const groqClient = new Groq({
-  apiKey: GROQ_API_KEY,
-})
+// Constructed lazily so an Ollama-only setup never pays the Groq-client cost
+// or requires GROQ_API_KEY to be set.
+let defaultGroqClient: Groq | null = null
+function getDefaultGroqClient(): Groq {
+  if (!defaultGroqClient) {
+    defaultGroqClient = new Groq({ apiKey: GROQ_API_KEY })
+  }
+  return defaultGroqClient
+}
 
 export async function generateCompletion(
   messages: AIMessage[],
@@ -29,11 +38,13 @@ export async function generateCompletion(
 
   if (AI_PROVIDER === 'groq') {
     const groqModel = options?.model || 'llama-3.3-70b-versatile'
+    const client = options?.apiKey ? new Groq({ apiKey: options.apiKey }) : getDefaultGroqClient()
     try {
-      const completion = await groqClient.chat.completions.create({
+      const completion = await client.chat.completions.create({
         messages: messages as any,
         model: groqModel,
         temperature,
+        max_tokens: options?.maxTokens,
         response_format: isJson ? { type: 'json_object' } : { type: 'text' },
       })
       return completion.choices[0]?.message?.content || null

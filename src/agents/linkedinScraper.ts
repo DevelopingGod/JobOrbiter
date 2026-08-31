@@ -1,76 +1,77 @@
-import { chromium } from 'playwright'
+import { chromium, type Browser } from 'playwright'
 
-export async function runLinkedinScraper(keywords: string, location: string) {
-  console.log(`[LinkedIn Agent] Booting headless chromium to search: ${keywords} in ${location}`)
-  
-  // Note: Running this on Vercel requires specialized browserless.io setup.
-  // For local execution, this will use the installed Chromium binary.
-  const browser = await chromium.launch({ headless: true })
+// NOTE (see TODOS.md "Replace LinkedIn scraping with a compliant integration"):
+// LinkedIn's ToS explicitly prohibits automated login. This scraper only ever
+// touches PUBLIC, unauthenticated job search pages now — no login flow, no
+// stored credentials. It's still an unofficial scrape of LinkedIn's public
+// pages (fragile, may get blocked), just not the ToS-violating login variant.
+
+export interface LinkedInJob {
+  title: string
+  company: string
+  link: string
+}
+
+export type LinkedInScrapeResult =
+  | { status: 'ok'; jobs: LinkedInJob[] }
+  | { status: 'error'; jobs: []; error: string }
+
+async function connectBrowser(): Promise<Browser> {
+  // In production (Vercel etc.) a real Chromium binary can't be launched
+  // in-process — connect to a remote browser service instead. Set
+  // BROWSERLESS_WS_ENDPOINT (Browserbase, browserless.io, or any
+  // Playwright-compatible remote browser) once you have one provisioned.
+  const remoteEndpoint = process.env.BROWSERLESS_WS_ENDPOINT
+  if (remoteEndpoint) {
+    return chromium.connect(remoteEndpoint)
+  }
+  // Local dev fallback: launches the Chromium binary installed on this machine.
+  return chromium.launch({ headless: true })
+}
+
+export async function runLinkedinScraper(keywords: string, location: string): Promise<LinkedInScrapeResult> {
+  console.log('[LinkedIn Agent] Connecting to browser to search:', keywords, 'in', location)
+
+  let browser: Browser
+  try {
+    browser = await connectBrowser()
+  } catch (error) {
+    console.error('[LinkedIn Agent] Failed to connect to a browser:', error)
+    return {
+      status: 'error',
+      jobs: [],
+      error: process.env.BROWSERLESS_WS_ENDPOINT
+        ? 'Could not connect to the configured remote browser service'
+        : 'No remote browser configured and no local Chromium available in this environment',
+    }
+  }
+
   const context = await browser.newContext()
   const page = await context.newPage()
 
   try {
-    // Navigate to LinkedIn Login
-    await page.goto('https://www.linkedin.com/login', { waitUntil: 'domcontentloaded' })
-    
-    // In a production secure environment, you would retrieve these from a secrets vault or user preferences securely.
-    // For this demonstration, we rely on environment variables if they exist, otherwise we just scrape public job pages.
-    const username = process.env.LINKEDIN_USER
-    const password = process.env.LINKEDIN_PASS
+    const publicUrl = `https://www.linkedin.com/jobs/search?keywords=${encodeURIComponent(keywords)}&location=${encodeURIComponent(location)}`
+    await page.goto(publicUrl, { waitUntil: 'domcontentloaded' })
 
-    if (username && password) {
-      console.log('[LinkedIn Agent] Credentials found. Attempting login...')
-      await page.fill('#username', username)
-      await page.fill('#password', password)
-      await page.click('[type="submit"]')
-      await page.waitForNavigation()
-      console.log('[LinkedIn Agent] Login successful. Navigating to jobs...')
-      
-      const searchUrl = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(keywords)}&location=${encodeURIComponent(location)}`
-      await page.goto(searchUrl, { waitUntil: 'domcontentloaded' })
-      
-      // Wait for job cards to load
-      await page.waitForSelector('.job-card-container', { timeout: 10000 }).catch(() => console.log('[LinkedIn Agent] No jobs found or timeout.'))
-      
-      const jobs = await page.$$eval('.job-card-container', cards => {
-        return cards.map(card => {
-          const title = card.querySelector('.job-card-list__title')?.textContent?.trim() || ''
-          const company = card.querySelector('.job-card-container__company-name')?.textContent?.trim() || ''
-          const link = card.querySelector('a')?.href || ''
-          return { title, company, link }
-        })
-      })
-      
-      console.log(`[LinkedIn Agent] Extracted ${jobs.length} jobs.`)
-      return jobs
+    await page.waitForSelector('.base-card', { timeout: 10000 }).catch(() => console.log('[LinkedIn Agent] No public jobs found or timeout.'))
 
-    } else {
-      console.log('[LinkedIn Agent] No credentials provided. Attempting public unauthenticated scraping (may be blocked)...')
-      
-      // Public search
-      const publicUrl = `https://www.linkedin.com/jobs/search?keywords=${encodeURIComponent(keywords)}&location=${encodeURIComponent(location)}`
-      await page.goto(publicUrl, { waitUntil: 'domcontentloaded' })
-      
-      await page.waitForSelector('.base-card', { timeout: 10000 }).catch(() => console.log('[LinkedIn Agent] No public jobs found or timeout.'))
-      
-      const jobs = await page.$$eval('.base-card', cards => {
-        return cards.map(card => {
-          const title = card.querySelector('.base-search-card__title')?.textContent?.trim() || ''
-          const company = card.querySelector('.base-search-card__subtitle')?.textContent?.trim() || ''
-          const link = card.querySelector('a')?.href || ''
-          return { title, company, link }
-        })
+    const jobs = await page.$$eval('.base-card', cards => {
+      return cards.map(card => {
+        const title = card.querySelector('.base-search-card__title')?.textContent?.trim() || ''
+        const company = card.querySelector('.base-search-card__subtitle')?.textContent?.trim() || ''
+        const link = card.querySelector('a')?.href || ''
+        return { title, company, link }
       })
-      
-      console.log(`[LinkedIn Agent] Extracted ${jobs.length} jobs publicly.`)
-      return jobs
-    }
+    })
+
+    console.log(`[LinkedIn Agent] Extracted ${jobs.length} jobs publicly.`)
+    return { status: 'ok', jobs }
 
   } catch (error) {
     console.error('[LinkedIn Agent] Error during scraping sequence:', error)
-    return []
+    return { status: 'error', jobs: [], error: error instanceof Error ? error.message : 'Unknown error' }
   } finally {
     await browser.close()
-    console.log('[LinkedIn Agent] Chromium session terminated.')
+    console.log('[LinkedIn Agent] Browser session terminated.')
   }
 }

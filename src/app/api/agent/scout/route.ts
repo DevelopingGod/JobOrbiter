@@ -4,6 +4,16 @@ import Groq from 'groq-sdk'
 import { fetchHackerNewsJobs } from '@/agents/hackernews'
 import { universalExtractJobs } from '@/agents/universalScraper'
 
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = []
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size))
+  }
+  return chunks
+}
+
+const EVAL_BATCH_SIZE = 5
+
 export async function POST(req: Request) {
   // We need to support reading a custom API key from the request if the user provided one due to 429
   const body = await req.json().catch(() => ({}))
@@ -39,7 +49,7 @@ export async function POST(req: Request) {
 
         // 3. Determine Active Sources
         const { data: sources } = await supabase.from('job_sources').select('*').eq('user_id', user.id)
-        const activeSources = sources && sources.length > 0 
+        const activeSources = sources && sources.length > 0
           ? sources.filter(s => s.is_active).map(s => s.source_id)
           : ['remotive']
 
@@ -55,19 +65,48 @@ export async function POST(req: Request) {
               .then(data => (data.jobs || []).map((j: any) => ({
                 id: `rm-${j.id}`, title: j.title, company_name: j.company_name, url: j.url, description: j.description, location: j.candidate_required_location, salary_info: j.salary, source: 'remotive'
               })))
-              .catch(() => [])
+              .catch(() => {
+                sendEvent('status', { message: 'Remotive source failed, continuing with other sources.' })
+                return []
+              })
           )
         }
 
         if (activeSources.includes('hackernews')) {
           sendEvent('status', { message: 'Deploying HackerNews Scout Agent...' })
-          fetchPromises.push(fetchHackerNewsJobs().then(jobs => jobs.map(j => ({ ...j, source: 'hackernews' }))).catch(() => []))
+          fetchPromises.push(
+            fetchHackerNewsJobs()
+              .then(result => {
+                if (result.status === 'error') {
+                  sendEvent('status', { message: `HackerNews source failed: ${result.error}` })
+                  return []
+                }
+                return result.jobs.map(j => ({ ...j, source: 'hackernews' }))
+              })
+              .catch(() => {
+                sendEvent('status', { message: 'HackerNews source failed, continuing with other sources.' })
+                return []
+              })
+          )
         }
 
         const customUrls = activeSources.filter(s => s.startsWith('http'))
         for (const url of customUrls) {
           sendEvent('status', { message: `Deploying Universal Scraper on ${new URL(url).hostname}...` })
-          fetchPromises.push(universalExtractJobs(url, apiKey).then(jobs => jobs.map(j => ({ ...j, source: new URL(url).hostname }))).catch(() => []))
+          fetchPromises.push(
+            universalExtractJobs(url, apiKey)
+              .then(result => {
+                if (result.status === 'error') {
+                  sendEvent('status', { message: `${new URL(url).hostname} source failed: ${result.error}` })
+                  return []
+                }
+                return result.jobs.map(j => ({ ...j, source: new URL(url).hostname }))
+              })
+              .catch(() => {
+                sendEvent('status', { message: `${new URL(url).hostname} source failed, continuing with other sources.` })
+                return []
+              })
+          )
         }
 
         sendEvent('status', { message: 'Flibbertigibbeting across the web...' })
@@ -82,53 +121,56 @@ export async function POST(req: Request) {
         }
 
         sendEvent('status', { message: `Ruminating on ${allJobs.length} extracted jobs against your profile...` })
-        const results = []
 
-        // 5. Evaluate all collected jobs with Groq
-        for (let i = 0; i < allJobs.length; i++) {
-          const job = allJobs[i]
-          
-          if (i % 5 === 0) {
-            sendEvent('status', { message: `Evaluating batch ${i + 1} to ${Math.min(i + 5, allJobs.length)} of ${allJobs.length}...` })
-          }
+        // 5. Evaluate collected jobs with Groq, in concurrency-limited batches.
+        // Matches are collected here and inserted in ONE batched call at the
+        // end instead of one insert per match.
+        const matchesToInsert: Array<any> = []
+        let processedCount = 0
+        let rateLimited = false
 
-          const prompt = `
-            You are an elite, mechanistic AI recruitment agent.
-            USER PREFERENCES: ${JSON.stringify(preferences || {})} (Please normalize all salary estimates in the output to the currency specified here, if present)
-            USER RESUME DATA (parsed): ${JSON.stringify(resume?.parsed_json || { skills: "React, TypeScript, Node.js", experience: "Software Engineer" })}
-            
-            JOB TO EVALUATE:
-            Source: ${job.source}
-            Title: ${job.title}
-            Company: ${job.company_name}
-            Location: ${job.location || 'Unknown'}
-            Salary: ${job.salary_info || 'Unknown'}
-            Description: ${job.description.substring(0, 1500)}
-            
-            TASK: Evaluate match. Output ONLY valid minified JSON: {"score": <0-100>, "reasoning": "<1-2 sentences>", "is_match": <bool>}
-          `
+        const batches = chunk(allJobs, EVAL_BATCH_SIZE)
 
-          try {
-            const completion = await groq.chat.completions.create({
-              messages: [
-                { role: 'system', content: 'You output strictly valid JSON. No markdown.' },
-                { role: 'user', content: prompt }
-              ],
-              model: 'llama-3.3-70b-versatile',
-              temperature: 0.1,
-              max_tokens: 300,
-              response_format: { type: 'json_object' }
-            })
+        for (const batch of batches) {
+          if (rateLimited) break
 
-            const resultText = completion.choices[0]?.message?.content
-            if (!resultText) continue
+          sendEvent('status', { message: `Evaluating batch ${processedCount + 1} to ${Math.min(processedCount + batch.length, allJobs.length)} of ${allJobs.length}...` })
 
-            const evaluation = JSON.parse(resultText)
+          const settled = await Promise.allSettled(
+            batch.map(async (job) => {
+              const prompt = `
+                You are an elite, mechanistic AI recruitment agent.
+                USER PREFERENCES: ${JSON.stringify(preferences || {})} (Please normalize all salary estimates in the output to the currency specified here, if present)
+                USER RESUME DATA (parsed): ${JSON.stringify(resume?.parsed_json || { skills: "React, TypeScript, Node.js", experience: "Software Engineer" })}
 
-            if (evaluation.is_match || evaluation.score > 70) {
-              const { data: insertedMatch, error } = await supabase
-                .from('job_matches')
-                .insert({
+                JOB TO EVALUATE:
+                Source: ${job.source}
+                Title: ${job.title}
+                Company: ${job.company_name}
+                Location: ${job.location || 'Unknown'}
+                Salary: ${job.salary_info || 'Unknown'}
+                Description: ${job.description.substring(0, 1500)}
+
+                TASK: Evaluate match. Output ONLY valid minified JSON: {"score": <0-100>, "reasoning": "<1-2 sentences>", "is_match": <bool>}
+              `
+
+              const completion = await groq.chat.completions.create({
+                messages: [
+                  { role: 'system', content: 'You output strictly valid JSON. No markdown.' },
+                  { role: 'user', content: prompt }
+                ],
+                model: 'llama-3.3-70b-versatile',
+                temperature: 0.1,
+                max_tokens: 300,
+                response_format: { type: 'json_object' }
+              })
+
+              const resultText = completion.choices[0]?.message?.content
+              if (!resultText) return null
+
+              const evaluation = JSON.parse(resultText)
+              if (evaluation.is_match || evaluation.score > 70) {
+                return {
                   user_id: user.id,
                   job_title: job.title,
                   company_name: job.company_name,
@@ -138,25 +180,50 @@ export async function POST(req: Request) {
                   description: job.description.substring(0, 500) + '...',
                   match_score: evaluation.score,
                   match_reasoning: evaluation.reasoning,
-                  source: job.source
-                })
-                .select()
-                .single()
+                  source: job.source,
+                }
+              }
+              return null
+            })
+          )
 
-              if (!error) results.push(insertedMatch)
+          for (const outcome of settled) {
+            processedCount++
+            if (outcome.status === 'fulfilled') {
+              if (outcome.value) matchesToInsert.push(outcome.value)
+            } else {
+              const err: any = outcome.reason
+              if (err?.status === 429) {
+                rateLimited = true
+              } else {
+                console.error('Groq parsing error:', err)
+              }
             }
-          } catch (err: any) {
-            if (err?.status === 429) {
-              sendEvent('rate_limit', { message: 'AI Limit Exhausted. Provide your own Groq API key to continue.' })
-              controller.close()
-              return
-            }
-            console.error('Groq parsing error:', err)
           }
         }
 
+        // Single batched insert instead of one insert per match.
+        let insertedMatches: Array<any> = []
+        if (matchesToInsert.length > 0) {
+          const { data, error } = await supabase.from('job_matches').insert(matchesToInsert).select()
+          if (error) {
+            console.error('Batch job_matches insert error:', error)
+          } else {
+            insertedMatches = data || []
+          }
+        }
+
+        if (rateLimited) {
+          // Tell the client what WAS accomplished before the rate limit hit,
+          // instead of leaving it looking like the whole scan failed.
+          sendEvent('done', { processed: processedCount, matches: insertedMatches.length })
+          sendEvent('rate_limit', { message: 'AI Limit Exhausted. Provide your own Groq API key to continue.' })
+          controller.close()
+          return
+        }
+
         sendEvent('status', { message: 'Finalizing intelligence report...' })
-        sendEvent('done', { processed: allJobs.length, matches: results.length })
+        sendEvent('done', { processed: allJobs.length, matches: insertedMatches.length })
         controller.close()
 
       } catch (error: any) {

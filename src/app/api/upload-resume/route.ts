@@ -62,11 +62,12 @@ export async function POST(req: NextRequest) {
     }
 
     // 5. Use AI to extract structured JSON
-    const structuredData = await extractResumeData(rawText)
+    const extraction = await extractResumeData(rawText)
 
-    if (!structuredData) {
-      return NextResponse.json({ error: 'AI parsing failed' }, { status: 500 })
+    if (extraction.status === 'error') {
+      return NextResponse.json({ error: extraction.error }, { status: 500 })
     }
+    const structuredData = extraction.data
 
     // 6. Save to database
     const { error: dbError } = await supabase.from('resumes').insert([
