@@ -21,9 +21,9 @@ test.describe('Dashboard & Protected Routes', () => {
 test.describe('Landing Page', () => {
   test('should render the landing page hero section correctly', async ({ page }) => {
     await page.goto('/');
-    
+
     // Verify main hero elements
-    await expect(page.getByText('Job Searcher AI')).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Get Started' })).toBeVisible();
+    await expect(page.getByText('Job Orbiter').first()).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Initialize Orbiter' })).toBeVisible();
   });
 });

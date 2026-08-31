@@ -2,40 +2,36 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
 
-interface Preferences {
-  desired_roles: string[]
-  min_salary: number
-  remote_only: boolean
-  currency?: string
-}
+const PreferencesSchema = z.object({
+  desired_roles: z.array(z.string()),
+  min_salary: z.number(),
+  remote_only: z.boolean(),
+  currency: z.string().optional(),
+})
+
+type Preferences = z.infer<typeof PreferencesSchema>
 
 export async function updateProfileSettings(data: Preferences) {
+  const parsed = PreferencesSchema.safeParse(data)
+  if (!parsed.success) {
+    throw new Error(`Invalid preferences payload: ${parsed.error.message}`)
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
 
   const { error } = await supabase.from('preferences').upsert({
     id: user.id,
-    desired_roles: data.desired_roles,
-    min_salary: data.min_salary,
-    remote_only: data.remote_only,
-    currency: data.currency
+    desired_roles: parsed.data.desired_roles,
+    min_salary: parsed.data.min_salary,
+    remote_only: parsed.data.remote_only,
+    currency: parsed.data.currency,
   })
 
-  // To prevent crashing if the user didn't run the migration, I'll catch and retry without currency if it fails.
-  if (error) {
-    if (error.message.includes('currency')) {
-      await supabase.from('preferences').upsert({
-        id: user.id,
-        desired_roles: data.desired_roles,
-        min_salary: data.min_salary,
-        remote_only: data.remote_only,
-      })
-    } else {
-      throw error
-    }
-  }
+  if (error) throw error
 
   revalidatePath('/dashboard/profile')
   return { success: true }

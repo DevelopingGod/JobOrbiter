@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
+import { createAdminClient } from '@/utils/supabase/admin'
 
 export async function login(formData: FormData) {
   const supabase = await createClient()
@@ -62,9 +63,18 @@ export async function signup(formData: FormData) {
       ])
 
     if (profileError) {
-      // If profile insert fails, we still created the user, but we should probably alert
-      console.error('Failed to create profile:', profileError)
-      return { error: 'User created, but profile initialization failed.' }
+      console.error('Failed to create profile, rolling back auth user:', profileError)
+      try {
+        const adminClient = createAdminClient()
+        await adminClient.auth.admin.deleteUser(data.user.id)
+      } catch (rollbackError) {
+        // Rollback itself failed (e.g. SUPABASE_SERVICE_ROLE_KEY not configured) —
+        // the user IS now stuck in the orphaned state this rollback exists to
+        // prevent. Log loudly so it's actually noticed and fixed, rather than
+        // silently leaving a broken account with no trace.
+        console.error('Signup rollback failed — orphaned auth user left behind:', data.user.id, rollbackError)
+      }
+      return { error: 'Signup failed while setting up your profile. Please try again.' }
     }
   }
 

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence, Variants } from 'framer-motion'
 import { Orbit, Loader2, ArrowLeft, Mail, Lock, User, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
+import { unstable_rethrow } from 'next/navigation'
 import { login, signup } from './actions'
 
 const containerVariants: Variants = {
@@ -29,15 +30,20 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
 
-    let result
-    if (isLogin) {
-      result = await login(formData)
-    } else {
-      result = await signup(formData)
-    }
+    try {
+      const result = isLogin ? await login(formData) : await signup(formData)
 
-    if (result?.error) {
-      setError(result.error)
+      if (result?.error) {
+        setError(result.error)
+        setLoading(false)
+      }
+    } catch (err) {
+      // login()/signup() call redirect() on success, which Next.js implements
+      // by throwing a special internal error — it must be allowed to keep
+      // propagating, not treated as a real failure. See:
+      // node_modules/next/dist/docs/.../unstable_rethrow.md
+      unstable_rethrow(err)
+      setError('Something went wrong. Please try again.')
       setLoading(false)
     }
   }

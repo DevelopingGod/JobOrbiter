@@ -45,3 +45,7 @@ next-env.d.ts
 
 # sonarqube local scanner cache
 .scannerwork/
+
+# playwright generated output (regenerated on every test run)
+/playwright-report/
+/test-results/
