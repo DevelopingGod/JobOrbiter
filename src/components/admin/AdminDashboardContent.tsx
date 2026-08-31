@@ -4,13 +4,23 @@ import { useState } from 'react'
 import { Users, Activity, Settings, Database, Server, Zap } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
+interface RegisteredUser {
+  id: string
+  name: string
+  matches: number
+  joinedAt: string
+}
+
 interface AdminProps {
   usersCount: number
   matchesCount: number
   sourceStats: Record<string, number>
+  sourceActive: Record<string, boolean>
+  users: RegisteredUser[]
+  toggleAgent: (formData: FormData) => Promise<void>
 }
 
-export function AdminDashboardContent({ usersCount, matchesCount, sourceStats }: AdminProps) {
+export function AdminDashboardContent({ usersCount, matchesCount, sourceStats, sourceActive, users, toggleAgent }: AdminProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'queries'>('overview')
 
   return (
@@ -99,9 +109,16 @@ export function AdminDashboardContent({ usersCount, matchesCount, sourceStats }:
                       <td className="py-4 font-mono text-foreground font-medium">{source}</td>
                       <td className="py-4 text-muted-foreground">{count} Users</td>
                       <td className="py-4 text-right">
-                        <button className="bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white px-4 py-2 rounded-lg font-bold transition-colors">
-                          Kill Agent
-                        </button>
+                        <form action={toggleAgent} className="inline">
+                          <input type="hidden" name="sourceId" value={source} />
+                          <input type="hidden" name="isActive" value={String(sourceActive[source] ?? false)} />
+                          <button
+                            type="submit"
+                            className="bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white px-4 py-2 rounded-lg font-bold transition-colors"
+                          >
+                            {sourceActive[source] ? 'Kill Agent' : 'Reactivate Agent'}
+                          </button>
+                        </form>
                       </td>
                     </tr>
                   ))}
@@ -139,28 +156,29 @@ export function AdminDashboardContent({ usersCount, matchesCount, sourceStats }:
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-border text-muted-foreground text-sm uppercase tracking-wider">
-                    <th className="pb-4 font-bold">User UUID</th>
-                    <th className="pb-4 font-bold">Status</th>
-                    <th className="pb-4 font-bold">Tokens Consumed</th>
-                    <th className="pb-4 font-bold text-right">Actions</th>
+                    <th className="pb-4 font-bold">Name</th>
+                    <th className="pb-4 font-bold">User ID</th>
+                    <th className="pb-4 font-bold">Matches Found</th>
+                    <th className="pb-4 font-bold text-right">Joined</th>
                   </tr>
                 </thead>
                 <tbody className="text-sm">
-                  {/* Mock Data for demonstration. In prod, fetch real users */}
-                  {[1, 2, 3].map((i) => (
-                    <tr key={i} className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors">
-                      <td className="py-4 font-mono text-foreground font-medium">user_f9a8b{i}x...</td>
-                      <td className="py-4">
-                        <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-xs font-bold">Active</span>
-                      </td>
-                      <td className="py-4 text-muted-foreground font-mono">{(i * 12450).toLocaleString()}</td>
-                      <td className="py-4 text-right">
-                        <button className="text-blue-500 hover:text-blue-400 font-bold text-xs uppercase tracking-wider transition-colors">
-                          Inspect
-                        </button>
-                      </td>
+                  {users.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="text-center py-8 text-muted-foreground">No registered users.</td>
                     </tr>
-                  ))}
+                  ) : (
+                    users.map((u) => (
+                      <tr key={u.id} className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors">
+                        <td className="py-4 text-foreground font-medium">{u.name}</td>
+                        <td className="py-4 font-mono text-muted-foreground text-xs">{u.id}</td>
+                        <td className="py-4 text-muted-foreground">{u.matches}</td>
+                        <td className="py-4 text-right text-muted-foreground text-xs">
+                          {u.joinedAt ? new Date(u.joinedAt).toLocaleDateString() : '—'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

@@ -283,7 +283,7 @@ export default function Home() {
           </Link>
           
           <div className="mt-20 pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center text-muted-foreground text-sm">
-            <p>© 2026 Job Orbiter. Master's Project.</p>
+            <p>© 2026 Job Searcher AI by Sankalp Indish.</p>
             <div className="flex gap-4 mt-4 md:mt-0">
               <Link href="/policy" className="hover:text-foreground">Privacy</Link>
               <Link href="/terms" className="hover:text-foreground">Terms</Link>

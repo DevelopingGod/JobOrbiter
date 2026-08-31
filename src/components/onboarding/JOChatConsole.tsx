@@ -4,15 +4,6 @@ import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Orbit, Mic, MicOff, Send, CheckCircle2, Terminal } from 'lucide-react'
 
-const MOCK_RESUME_DATA = {
-  skills: ['TypeScript', 'React', 'Node.js', 'Python', 'AI/ML'],
-  experience: [
-    { title: 'Senior AI Engineer', company: 'Tech Corp', years: '2022 - Present' },
-    { title: 'Fullstack Developer', company: 'Startup Inc', years: '2019 - 2022' }
-  ],
-  education: 'M.S. Computer Science'
-}
-
 interface Message {
   role: 'system' | 'user' | 'assistant'
   content: string
@@ -31,24 +22,33 @@ export function JOChatConsole({ onComplete, standalone = false, parsedResumeData
   const [isListening, setIsListening] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
-  
-  const SpeechRecognition = typeof window !== 'undefined' ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition : null
-  const recognition = SpeechRecognition ? new SpeechRecognition() : null
+  const recognitionRef = useRef<any>(null)
+  const recognitionInitialized = useRef(false)
 
-  if (recognition) {
-    recognition.continuous = false
-    recognition.interimResults = false
-    recognition.lang = 'en-US'
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript
-      setInput(transcript)
-      setIsListening(false)
+  // Constructed once (not on every render): a fresh SpeechRecognition
+  // instance per render would wire fresh event handlers each time while
+  // any in-flight instance from a prior render kept its own stale handlers.
+  if (!recognitionInitialized.current) {
+    recognitionInitialized.current = true
+    const SpeechRecognition = typeof window !== 'undefined' ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition : null
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition()
+      recognition.continuous = false
+      recognition.interimResults = false
+      recognition.lang = 'en-US'
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript
+        setInput(transcript)
+        setIsListening(false)
+      }
+      recognition.onerror = () => setIsListening(false)
+      recognition.onend = () => setIsListening(false)
+      recognitionRef.current = recognition
     }
-    recognition.onerror = () => setIsListening(false)
-    recognition.onend = () => setIsListening(false)
   }
 
   const toggleListen = () => {
+    const recognition = recognitionRef.current
     if (!recognition) {
       alert("Voice input is not supported in this browser. Please use Chrome or Edge.")
       return
@@ -110,28 +110,33 @@ export function JOChatConsole({ onComplete, standalone = false, parsedResumeData
       {!standalone && (
         <div className="flex-1 bg-zinc-950/80 p-6 rounded-none border-l-4 border-l-cyan-500 border-r border-t border-b border-zinc-800 shadow-[0_0_30px_rgba(6,182,212,0.15)] relative overflow-hidden flex flex-col clip-path-cyber">
           <div className="absolute inset-0 bg-[linear-gradient(rgba(6,182,212,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(6,182,212,0.05)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none" />
-          
+
           <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-cyan-400 uppercase tracking-widest relative z-10">
             <CheckCircle2 className="w-5 h-5" />
             Extracted DNA
           </h3>
-          
+
+          {!parsedResumeData ? (
+            <p className="text-sm text-zinc-500 relative z-10">
+              No resume data was extracted. This is a bug, not expected behavior here — please re-upload your resume.
+            </p>
+          ) : (
           <div className="space-y-6 overflow-y-auto custom-scrollbar pr-2 relative z-10 flex-1">
             <div>
               <h4 className="text-xs font-bold text-cyan-500/70 uppercase tracking-widest mb-3">Skills_Matrix</h4>
               <div className="flex flex-wrap gap-2">
-                {(parsedResumeData?.skills || MOCK_RESUME_DATA.skills).map((skill: string) => (
+                {(parsedResumeData?.skills || []).map((skill: string) => (
                   <span key={skill} className="bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 px-3 py-1 rounded-none text-xs font-medium uppercase tracking-wider">
                     {skill}
                   </span>
                 ))}
               </div>
             </div>
-            
+
             <div>
               <h4 className="text-xs font-bold text-cyan-500/70 uppercase tracking-widest mb-3">Exp_Log</h4>
               <div className="space-y-4">
-                {(parsedResumeData?.experience || MOCK_RESUME_DATA.experience).map((exp: any, i: number) => (
+                {(parsedResumeData?.experience || []).map((exp: any, i: number) => (
                   <div key={i} className="border-l-2 border-cyan-500/50 pl-4 py-1 relative">
                     <div className="absolute w-2 h-2 bg-cyan-500 -left-[5px] top-2 transform rotate-45" />
                     <p className="font-bold text-white tracking-wide">{exp.title}</p>
@@ -144,12 +149,13 @@ export function JOChatConsole({ onComplete, standalone = false, parsedResumeData
             <div>
               <h4 className="text-xs font-bold text-cyan-500/70 uppercase tracking-widest mb-3">Edu_Record</h4>
               <p className="text-white text-sm">
-                {parsedResumeData?.education 
+                {parsedResumeData?.education
                   ? (Array.isArray(parsedResumeData.education) ? parsedResumeData.education.map((e: any) => e.degree).join(' // ') : parsedResumeData.education)
-                  : MOCK_RESUME_DATA.education}
+                  : '—'}
               </p>
             </div>
           </div>
+          )}
         </div>
       )}
 

@@ -13,3 +13,17 @@
 **Effort:** L
 **Priority:** P3
 **Depends on:** None (but blocked in practice on external partner/vendor access being obtained first)
+
+## Admin
+
+### Build a real System Queries log for the admin dashboard
+
+**What:** `AdminDashboardContent.tsx`'s "System Queries" tab shows hardcoded mock log lines (fake timestamps, a fabricated "Crawling Remotive API page 3..." message, etc.) — self-aware in a code comment as demo data. Per plan-eng-review (2026-08-31), the sibling "User Registry" tab was rewired to real data in the same pass; this tab was deliberately left as tracked scope instead, since it needs actual infrastructure this app doesn't have yet.
+
+**Why:** An admin's "system queries" / audit log view is only meaningful if backed by something that actually records events (scrape attempts, extraction results, errors) as they happen — right now nothing in the codebase writes such a log anywhere.
+
+**Context:** Building this for real means adding an events/audit table (e.g. a `scrape_events` table written to by `scout/route.ts` and the agent files whenever a source is fetched or fails), then querying and rendering the most recent rows here instead of the mock array. Whoever picks this up should design the event schema first — what's actually useful to show an admin (source, status, timestamp, error message) — before touching this component.
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** None

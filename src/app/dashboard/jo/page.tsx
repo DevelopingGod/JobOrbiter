@@ -16,7 +16,7 @@ export default async function JOPermanentConsolePage() {
   }
   
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle()
-  const isAdmin = user.email === 'admin@orbiter.io' || profile?.role === 'admin'
+  const isAdmin = profile?.role === 'admin'
 
   return (
     <div className="min-h-screen bg-background flex flex-col relative overflow-hidden">
