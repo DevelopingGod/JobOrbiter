@@ -164,9 +164,9 @@ export default function Home() {
                     <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-orange-500 text-white font-black text-xl mb-6 shadow-[0_0_20px_rgba(249,115,22,0.4)]">
                       1
                     </div>
-                    <h3 className="text-3xl font-bold text-foreground mb-4">Ingestion & Vectorization</h3>
+                    <h3 className="text-3xl font-bold text-foreground mb-4">Ingestion & Structuring</h3>
                     <p className="text-muted-foreground text-lg">
-                      Upload your PDF. The agent parses semantics, extracts core competencies, and embeds them into a high-dimensional vector space via Postgres pgvector.
+                      Upload your PDF. An LLM agent reads it and extracts your contact info, skills, work history, and education into structured data, ready for matching.
                     </p>
                   </div>
                 </div>
@@ -176,13 +176,12 @@ export default function Home() {
                     <pre className="text-muted-foreground whitespace-pre-wrap">
                       <span className="text-orange-400">{"{"}</span>{`
   "status": "success",
-  "vector_id": "v_8x99a",
-  "embedding": [
-    0.0452, -0.9231, 0.4412, ...
-  ],
-  "competencies": [`}
+  "skills": [`}
                       <span className="text-orange-500">"React", "System Design", "RLHF"</span>
-                      {`]
+                      {`],
+  "experience": [
+    { "title": "Senior Engineer", "company": "..." }
+  ]
 `}<span className="text-orange-400">{"}"}</span>
                     </pre>
                     <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-80" />

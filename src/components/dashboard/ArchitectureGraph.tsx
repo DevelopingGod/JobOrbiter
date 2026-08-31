@@ -176,57 +176,63 @@ export function ArchitectureGraph({ userSources = [], isLoggedIn = false }: { us
   }
 
   const renderSidePanelContent = () => {
-    switch (activeNodeId) {
-      case 'resume':
-        return (
-          <>
-            <h3 className="text-2xl font-black text-orange-500 mb-2 uppercase tracking-widest">Vectorized DNA</h3>
-            <p className="text-zinc-300 text-sm mb-6 leading-relaxed">Your uploaded resume is parsed and tokenized into embeddings. JO uses this DNA to run semantic similarity matches against raw job descriptions.</p>
-            <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-xl">
-              <Info className="w-5 h-5 text-blue-400 mb-2" />
-              <p className="text-xs text-blue-200">Supabase pgvector is used to store your resume DNA for hyper-fast retrieval.</p>
-            </div>
-          </>
-        )
-      case 'preferences':
-        return (
-          <>
-            <h3 className="text-2xl font-black text-orange-500 mb-2 uppercase tracking-widest">Constraints</h3>
-            <p className="text-zinc-300 text-sm mb-6 leading-relaxed">The hard limits for the scout agents. Modify them below to widen or narrow your intelligence gathering.</p>
-            <PreferencesForm onComplete={() => setActiveNodeId(null)} />
-          </>
-        )
-      case 'source-default':
-      case activeNodeId?.startsWith('source-') ? activeNodeId : '':
-        return (
-          <>
-            <h3 className="text-2xl font-black text-emerald-500 mb-2 uppercase tracking-widest">Scraping Target</h3>
-            <p className="text-zinc-300 text-sm mb-6 leading-relaxed">The active domains and APIs your fleet is currently authorized to crawl.</p>
-            <SourcesForm onComplete={() => setActiveNodeId(null)} isLoggedIn={isLoggedIn} />
-          </>
-        )
-      case 'agent':
-        return (
-          <>
-            <h3 className="text-2xl font-black text-orange-500 mb-2 uppercase tracking-widest">Agentic Core (JO)</h3>
-            <p className="text-zinc-300 text-sm mb-6 leading-relaxed">The central brain of the operation. JO processes raw HTML from the scraping targets and mathematically scores the job against your Vectorized DNA and Constraints using Llama-3 models.</p>
-            <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-xl font-mono text-xs text-orange-300">
-              [SYSTEM STATUS: ONLINE]<br/>
-              [INFERENCE SPEED: 850 tokens/sec]<br/>
-              [ACTIVE THREADS: 4]
-            </div>
-          </>
-        )
-      case 'feed':
-        return (
-          <>
-            <h3 className="text-2xl font-black text-orange-500 mb-2 uppercase tracking-widest">Mission Control</h3>
-            <p className="text-zinc-300 text-sm mb-6 leading-relaxed">The final output node. All highly-scored matches are presented in real-time on your dashboard.</p>
-          </>
-        )
-      default:
-        return null
+    if (activeNodeId === 'resume') {
+      return (
+        <>
+          <h3 className="text-2xl font-black text-orange-500 mb-2 uppercase tracking-widest">Vectorized DNA</h3>
+          <p className="text-zinc-300 text-sm mb-6 leading-relaxed">Your uploaded resume is parsed by an LLM agent into structured data — contact details, skills, work history, and education. JO uses this data to score how well each job matches your background.</p>
+          <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-xl">
+            <Info className="w-5 h-5 text-blue-400 mb-2" />
+            <p className="text-xs text-blue-200">The extracted data is stored in Supabase alongside your original resume file.</p>
+          </div>
+        </>
+      )
     }
+
+    if (activeNodeId === 'preferences') {
+      return (
+        <>
+          <h3 className="text-2xl font-black text-orange-500 mb-2 uppercase tracking-widest">Constraints</h3>
+          <p className="text-zinc-300 text-sm mb-6 leading-relaxed">The hard limits for the scout agents. Modify them below to widen or narrow your intelligence gathering.</p>
+          <PreferencesForm onComplete={() => setActiveNodeId(null)} />
+        </>
+      )
+    }
+
+    if (activeNodeId === 'source-default' || activeNodeId?.startsWith('source-')) {
+      return (
+        <>
+          <h3 className="text-2xl font-black text-emerald-500 mb-2 uppercase tracking-widest">Scraping Target</h3>
+          <p className="text-zinc-300 text-sm mb-6 leading-relaxed">The active domains and APIs your fleet is currently authorized to crawl.</p>
+          <SourcesForm onComplete={() => setActiveNodeId(null)} isLoggedIn={isLoggedIn} />
+        </>
+      )
+    }
+
+    if (activeNodeId === 'agent') {
+      return (
+        <>
+          <h3 className="text-2xl font-black text-orange-500 mb-2 uppercase tracking-widest">Agentic Core (JO)</h3>
+          <p className="text-zinc-300 text-sm mb-6 leading-relaxed">The central brain of the operation. JO processes raw HTML from the scraping targets and mathematically scores the job against your Vectorized DNA and Constraints using Llama-3 models.</p>
+          <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-xl font-mono text-xs text-orange-300">
+            [SYSTEM STATUS: ONLINE]<br/>
+            [INFERENCE SPEED: 850 tokens/sec]<br/>
+            [ACTIVE THREADS: 4]
+          </div>
+        </>
+      )
+    }
+
+    if (activeNodeId === 'feed') {
+      return (
+        <>
+          <h3 className="text-2xl font-black text-orange-500 mb-2 uppercase tracking-widest">Mission Control</h3>
+          <p className="text-zinc-300 text-sm mb-6 leading-relaxed">The final output node. All highly-scored matches are presented in real-time on your dashboard.</p>
+        </>
+      )
+    }
+
+    return null
   }
 
   return (

@@ -24,7 +24,7 @@ export default function PolicyPage() {
               <h2 className="text-2xl font-bold text-foreground">1. Data Collection</h2>
             </div>
             <p className="text-muted-foreground leading-relaxed">
-              Job Orbiter collects resume data exclusively for the purpose of matching you with employment opportunities. When you upload a resume (PDF parsing), this data is transformed into vector embeddings and stored securely in our heavily-guarded PostGIS pgvector instances. We do not peek at this data unless strictly necessary.
+              Job Orbiter collects resume data exclusively for the purpose of matching you with employment opportunities. When you upload a resume (PDF parsing), an AI model extracts structured information from it (contact details, skills, work history, education), and both the original file and the extracted data are stored securely in our database. We do not peek at this data unless strictly necessary.
             </p>
           </section>
 
